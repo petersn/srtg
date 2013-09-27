@@ -1,0 +1,12 @@
+# Ropes config for SRTG
+
+{
+
+	"KMIII": {
+		"diameter": 9.5,
+		"strength": 27,
+		"density": 61
+	}
+
+}
+
