@@ -1,6 +1,7 @@
 #! /usr/bin/python
 
-import srt_solver
+#import srt_solver
+import catenary_solver
 import srt_fe
 from pygame.locals import *
 import pygame
@@ -32,13 +33,14 @@ while True:
 
 	for length in (450,):# 200, 300, 400, 500):
 		try:
-			params = srt_solver.fit_parabola(arc_x, arc_y, mouse_x, mouse_y, length)
+			#params = srt_solver.fit_parabola(arc_x, arc_y, mouse_x, mouse_y, length)
+			cat = catenary_solver.from_ABl(arc_x, arc_y, mouse_x, mouse_y, length)
 		except AssertionError:
-			params = None
+			cat = None
 
-		if params:
+		if cat:
 			xs = range(min(arc_x, mouse_x), max(arc_x, mouse_x)+1)
-			ys = [srt_solver.parabola(x, params) for x in xs]
+			ys = [cat(x) for x in xs]
 			points = zip(xs, ys)
 			if len(points) > 1:
 				pygame.draw.lines(screen, (0,0,0), False, points)
