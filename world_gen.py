@@ -48,8 +48,6 @@ class World:
                             R1 += old[x+xblock][y+yblock].material #THIS WILL BREAK IF DIRT ISN'T 1 AND THE REST OF BLOCKS ARE 0
                     self.blocks[x+1][y+1].material = R1/5 #I'm being clever here but be careful
 
-        for i in xrange(secondpasses):
-            old = copy.deepcopy(self.blocks)
             for x in xrange(self.x-4):
                 for y in xrange(self.y-4):
                     R2 = 0
@@ -59,15 +57,26 @@ class World:
                     if(R2 < 3):
                         self.blocks[x+2][y+2].material = 1
 
+
+        for i in xrange(secondpasses):
+            old = copy.deepcopy(self.blocks)
+            for x in xrange(self.x-2):
+                for y in xrange(self.y-2):
+                    R1 = 0
+                    for xblock in range(3): #old[x:x+3]:
+                        for yblock in range(3):#old[xblock][y:y+3]:
+                            R1 += old[x+xblock][y+yblock].material #THIS WILL BREAK IF DIRT ISN'T 1 AND THE REST OF BLOCKS ARE 0
+                    self.blocks[x+1][y+1].material = R1/5 #I'm being clever here but be careful
+
                         
             
             
 
-world = World(60,20,346346)
+world = World(60,20,623245)
 
 world.seed_dirt()
 
-world.sculpt_dirt(1,4,3)
+world.sculpt_dirt(1,4,2)
 
 def printout(world):
     for i in range(len(world.blocks[0])):
@@ -77,5 +86,4 @@ def printout(world):
         print '\n'
 
 printout(world)
-
 
