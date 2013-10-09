@@ -108,25 +108,28 @@ class Catenary:
 		# wlog, let x0 < x1.
 		if x0 > x1:
 			x0, y0, x1, y1 = x1, y1, x0, y0
-		# To accelerate convergence, we require that 
+		# To accelerate convergence, we generate
 		# Case 1.
-		params = srt_solver.fit_parabola(x0, y0, x1, y1, length)
-		print "Parabola Params", params
-		print srt_solver.parabola((x0+x1)/2.0, params)
-		a = 1
-		cat = Catenary(params[1], params[2]-a, a)
-		print "Catenary Params", (cat.xm, cat.ym, cat.a)
-		print cat((x0+x1)/2.0)
-		print "INITIAL FIT"
-		print cat(x0), cat(x1)
-		d = cat.deriv(x0)
-		dd = cat.second_deriv(x0)
-		# To start with, for dd = 1, compute d to hit the target assuming a parabolic fit.
-#		dd = 1.0
-#		error = y1 - (y0 + dd * (x1 - x0)**2 / 2.0)
-#		d = error / (x1 - x0)
+		if length < point_sep*1.5:
+			# The rope is spanning a mostly horizontal.
+			# To start with, for dd = 1, compute d to hit the target assuming a parabolic fit.
+			dd = 1.0
+			error = y1 - (y0 + dd * (x1 - x0)**2 / 2.0)
+			d = error / (x1 - x0)
+			print "INIT"
+			# Now, match the boundary conditions.
+			for i in xrange(10):
+				cat = Catenary.from_x0y0ddd(x0, y0, d, dd)
+				error = cat(x1) - y1
+				slope = Catenary.deriv_d_x0y0ddd(x0, y0, d, dd, x1)
+				d -= error / slope
+				print error
+		print "MAIN"
 		# Use Newton's method to zoom straight to the right answer.
-		for i in xrange(13):
+		for i in xrange(100):
+			if i < 50: alpha = 0.01*10
+			elif i < 90: alpha = 0.1
+			else: alpha = 1
 			cat = Catenary.from_x0y0ddd(x0, y0, d, dd)
 			error = [cat.arc_length(x0, x1) - length, cat(x1) - y1]
 			# Compute the Jacobian.
@@ -135,9 +138,9 @@ class Catenary:
 			# Invert the Jacobian, and multiply it by our error.
 			k = solve_system([arclen_gradient, gradient], error)
 			# Subtract the result off, making a Newton step.
-			d -= k[0]
-			dd -= k[1]
-			print error
+			d -= k[0] * alpha
+			dd -= k[1] * alpha
+			print alpha, error, d, dd
 		return cat
 
 	@staticmethod
@@ -174,7 +177,7 @@ class Catenary:
 
 #print Catenary.deriv_dd_x0y0ddd(3,0,4,7,4.5)
 cat = Catenary.from_ABl(-1, 0, 1, 10, 12)
-print cat.arc_length(0, 1)
-print cat(0)
+print cat(-1)
 print cat(1)
+print cat.arc_length(-1, 1)
 
