@@ -20,8 +20,8 @@ class World:
 
         random.seed(self.seed)
         
-        for j in xrange(self.y):
-            for i in xrange(self.x):
+        for i in xrange(self.x):
+            for j in xrange(self.y):
                 if(random.random()<fill_factor):
                     self.blocks[i][j] = Block(i,j,1)
                 else:
@@ -40,8 +40,8 @@ class World:
 
         for i in xrange(firstpasses):
             old = copy.deepcopy(self.blocks)
-            for y in xrange(len(self.blocks)-2):
-                for x in xrange(len(self.blocks)-2):
+            for x in xrange(self.x-2):
+                for y in xrange(self.y-2):
                     R1 = 0
                     for xblock in range(3): #old[x:x+3]:
                         for yblock in range(3):#old[xblock][y:y+3]:
@@ -50,8 +50,8 @@ class World:
 
         for i in xrange(secondpasses):
             old = copy.deepcopy(self.blocks)
-            for y in xrange(self.y-4):
-                for x in xrange(self.x-4):
+            for x in xrange(self.x-4):
+                for y in xrange(self.y-4):
                     R2 = 0
                     for xblock in range(5):
                         for yblock in range(5):
@@ -63,18 +63,19 @@ class World:
             
             
 
-world = World(30,30,4623)
+world = World(60,20,346346)
 
 world.seed_dirt()
 
 world.sculpt_dirt(1,4,3)
 
 def printout(world):
-    for j in range(len(world.blocks)):
-        for i in range(len(world.blocks[j])):
-            if(world.blocks[i][j].material == 1): print '#',
+    for i in range(len(world.blocks[0])):
+        for j in range(len(world.blocks)):
+            if(world.blocks[j][i].material == 1): print '#',
             else: print ' ',
         print '\n'
 
 printout(world)
+
 
