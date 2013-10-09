@@ -1,4 +1,6 @@
-import string, struct, random, copy
+import string, struct, random, copy, sys
+import pygame
+
 
 class Block:
     def __init__(self, x, y, material):
@@ -70,20 +72,26 @@ class World:
 
                         
             
-            
-
-world = World(60,20,623245)
+world = World(64,40,623245)
 
 world.seed_dirt()
 
 world.sculpt_dirt(1,4,2)
 
-def printout(world):
-    for i in range(len(world.blocks[0])):
-        for j in range(len(world.blocks)):
-            if(world.blocks[j][i].material == 1): print '#',
-            else: print ' ',
-        print '\n'
+def display_shit(world):
+    pygame.init()
+    windowSurfaceObj = pygame.display.set_mode((1280,800))
+    fpsClock = pygame.time.Clock()
+    for i in xrange(len(world.blocks)):
+        for j in xrange(len(world.blocks[i])):
+            if(world.blocks[i][j].material == 1):
+                #print world.blocks[i][j].x, world.blocks[i][j].y
+                pygame.draw.rect(windowSurfaceObj,pygame.Color(108,67,21),((world.blocks[i][j].x*20,world.blocks[i][j].y*20),(20,20)))
+            else: pygame.draw.rect(windowSurfaceObj,pygame.Color(41,27,2),((world.blocks[i][j].x*20,world.blocks[i][j].y*20),(20,20)))
+            pygame.display.update()
+    pygame.display.update()
+    fpsClock.tick(30)
+    
+display_shit(world)
 
-printout(world)
 
