@@ -10,6 +10,9 @@ import math
 import functools
 import srt_solver
 
+class BadFittingException(Exception):
+	pass
+
 def solve_system(matrix, y):
 	"""solve_system(matrix, y) -> x
 
@@ -19,8 +22,9 @@ def solve_system(matrix, y):
 	"""
 	(a, b), (c, d) = matrix[0], matrix[1]
 	det = float(a * d - b * c)
+	if det == 0:
+		raise BadFittingException("singular Jacobian")
 	a, b, c, d = [i/det for i in (d, -b, -c, a)]
-#	print "[[%.2f %.2f] [%.2f %.2f]]" % (a, b, c, d)
 	return a * y[0] + b * y[1], c * y[0] + d * y[1]
 
 def takes_floats(f):
@@ -33,7 +37,8 @@ def takes_floats(f):
 class Catenary:
 	def __init__(self, xm, ym, a):
 		self.xm, self.ym, self.a = xm, ym, a
-		assert a > 0
+		if a <= 0:
+			raise BadFittingException("a <= 0")
 
 	def __call__(self, x):
 		return self.ym + self.a * math.cosh((x - self.xm) / self.a)
@@ -58,11 +63,7 @@ class Catenary:
 		a = (1 + d**2)**0.5 / dd
 		xm = x0 - (1 + d**2)**0.5 * math.asinh(d) / dd
 		ym = y0 - (1 + d**2.0) / dd
-		cat = Catenary(xm, ym, a)
-#		print cat(x0), y0
-#		print cat.deriv(x0), d
-#		print cat.second_deriv(x0), dd
-		return cat
+		return Catenary(xm, ym, a)
 
 	@staticmethod
 	def arclen_grad_x0y0ddd(x0, y0, d, dd, low, high):
@@ -97,8 +98,44 @@ class Catenary:
 
 		return alpha, beta, gamma
 
+	newton_schedules = [
+		[
+			(0.1, 5),
+			(1, 10),
+		],
+		[
+			(0.01, 20),
+			(0.02, 20),
+			(0.04, 20),
+			(0.08, 20),
+			(0.16, 20),
+			(1, 10),
+		],
+		[
+			(0.002, 100),
+			(0.004, 100),
+			(0.008, 100),
+			(0.016, 100),
+			(0.032, 100),
+			(0.064, 100),
+			(0.128, 100),
+			(1, 10),
+		],
+	]
+
 	@staticmethod
 	def from_ABl(x0, y0, x1, y1, length):
+		for schedule in Catenary.newton_schedules:
+			try:
+				cat = Catenary.scheduled_from_ABl(x0, y0, x1, y1, length, newton_schedule=schedule)
+			except BadFittingException:
+				continue
+			if abs(cat(x0)-y0) < 1e-9 and abs(cat(x1)-y1) < 1e-9 and abs(cat.arc_length(x0, x1)-length) < 1e-9:
+				return cat
+		raise Exception("we had no schedule slow enough to work!")
+
+	@staticmethod
+	def scheduled_from_ABl(x0, y0, x1, y1, length, newton_schedule):
 		"""from_ABl(x0, y0, x1, y1, length) -> Catenary
 
 		The returned catenary passes through the given points, and has the given arc length.
@@ -109,43 +146,30 @@ class Catenary:
 		# wlog, let x0 < x1.
 		if x0 > x1:
 			x0, y0, x1, y1 = x1, y1, x0, y0
-		# To accelerate convergence, we generate
-		# Case 1.
-		if length < point_sep*1.5 or True:
-			# The rope is spanning a mostly horizontal.
-			# To start with, for dd = 1, compute d to hit the target assuming a parabolic fit.
-			dd = (length / abs(x0-x1))**2
-			error = y1 - (y0 + dd * (x1 - x0)**2 / 2.0)
-			d = error / (x1 - x0)
-			print "INIT"
-			# Now, match the boundary conditions.
-			error = 1
-			while abs(error) > 1e-9:
-				cat = Catenary.from_x0y0ddd(x0, y0, d, dd)
-				error = cat(x1) - y1
-				slope = Catenary.deriv_d_x0y0ddd(x0, y0, d, dd, x1)
-				d -= error / slope
-				print error, cat.arc_length(x0, x1)
-		print "MAIN"
-#		exit()
-		# Use Newton's method to zoom straight to the right answer.
-		for i in xrange(200):
-			if i < 100: alpha = 0.002
-			elif i < 150: alpha = 0.01
-			elif i < 190: alpha = 0.1
-			else: alpha = 1
+		# To start with, for dd chosen by the below heuristic, compute d to hit the target assuming a parabolic fit.
+		dd = (length / abs(x0-x1))**2
+		error = y1 - (y0 + dd * (x1 - x0)**2 / 2.0)
+		d = error / (x1 - x0)
+		# Now, match the boundary conditions, because the above fit is really crummy.
+		error = 1
+		while abs(error) > 1e-9:
 			cat = Catenary.from_x0y0ddd(x0, y0, d, dd)
-			error = [cat.arc_length(x0, x1) - length, cat(x1) - y1]
-			# Compute the Jacobian.
-			arclen_gradient = Catenary.arclen_grad_x0y0ddd(x0, y0, d, dd, x0, x1)[1:]
-			gradient = Catenary.gradient_x0y0ddd(x0, y0, d, dd, x1)
-			# Invert the Jacobian, and multiply it by our error.
-			k = solve_system([arclen_gradient, gradient], error)
-#			print k
-			# Subtract the result off, making a Newton step.
-			d -= k[0] * alpha
-			dd -= k[1] * alpha
-			print alpha, error, d, dd
+			error = cat(x1) - y1
+			slope = Catenary.deriv_d_x0y0ddd(x0, y0, d, dd, x1)
+			d -= error / slope
+		# Use Newton's method to zoom straight to the right answer.
+		for alpha, num_rounds in newton_schedule:
+			for i in xrange(num_rounds):
+				cat = Catenary.from_x0y0ddd(x0, y0, d, dd)
+				error = [cat.arc_length(x0, x1) - length, cat(x1) - y1]
+				# Compute the Jacobian.
+				arclen_gradient = Catenary.arclen_grad_x0y0ddd(x0, y0, d, dd, x0, x1)[1:]
+				gradient = Catenary.gradient_x0y0ddd(x0, y0, d, dd, x1)
+				# Invert the Jacobian, and multiply it by our error.
+				k = solve_system([arclen_gradient, gradient], error)
+				# Subtract the result off, making a Newton step.
+				d -= k[0] * alpha
+				dd -= k[1] * alpha
 		return cat
 
 	@staticmethod
@@ -180,10 +204,14 @@ class Catenary:
 	def gradient_x0y0ddd(x0, y0, d, dd, x):
 		return [getattr(Catenary, "deriv_%s_x0y0ddd" % s)(x0, y0, d, dd, x) for s in ("d", "dd")]
 
-#print Catenary.deriv_dd_x0y0ddd(3,0,4,7,4.5)
-start, stop, length = 0, 0.01, 600
-cat = Catenary.from_ABl(start, 0, stop, 550, length)
-print cat(start)
-print cat(stop)
-print cat.arc_length(start, stop)
+if __name__ == "__main__":
+	start, stop, length = 0, 5, 10
+	import time
+	t0 = time.time()
+	cat = Catenary.from_ABl(start, 0, stop, 5, length)
+	t1 = time.time()
+	print 1.0 / (t1 - t0)
+	print cat(start)
+	print cat(stop)
+	print cat.arc_length(start, stop)
 
