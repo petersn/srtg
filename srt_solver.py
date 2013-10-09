@@ -29,11 +29,11 @@ def darc_lengthda(x0, x1, params):
 
 def parabola(x, params):
 	a, xm, ym = params
-	return - a * (x - xm)**2.0 + ym
+	return a * (x - xm)**2.0 + ym
 
 def dparabola(x, params):
 	a, xm, ym = params
-	return - 2 * a * (x - xm)
+	return 2 * a * (x - xm)
 
 def fit_parabola(x0, y0, x1, y1, length):
 	assert (x0-x1)**2 + (y0-y1)**2 < length**2
@@ -51,7 +51,7 @@ def fit_parabola(x0, y0, x1, y1, length):
 			slope = darc_lengthda(x0, x1, params)
 			a -= error / slope
 		# Recenter the parabola to pass through both control points.
-		xm = (a*(x0**2-x1**2) + y0 - y1) / (2*a*(x0-x1))
+		xm = (a*(x0**2-x1**2) + y1 - y0) / (2*a*(x0-x1))
 		if abs(xm-old_xm) < 1e-5:
 			break
 		params = (a, xm, 0)
@@ -83,4 +83,11 @@ def load_config_file(*path):
 #rope_types = {}
 #for key, value in load_config_file("ropes.txt").iteritems():
 #	rope_types[key] = RopeType(key, value)
+
+if __name__ == "__main__":
+	params = fit_parabola(0, 0, 1, 1, 2)
+	print params
+	print parabola(0, params)
+	print parabola(1, params)
+	print parabola_arc_length(0, 1, params)
 
