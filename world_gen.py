@@ -41,6 +41,7 @@ class World:
     def sculpt_dirt(self, sculpt_size, firstpasses, secondpasses):
 
         for i in xrange(firstpasses):
+            print "FIRST"
             old = copy.deepcopy(self.blocks)
             for x in xrange(self.x-2):
                 for y in xrange(self.y-2):
@@ -50,6 +51,7 @@ class World:
                             R1 += old[x+xblock][y+yblock].material #THIS WILL BREAK IF DIRT ISN'T 1 AND THE REST OF BLOCKS ARE 0
                     self.blocks[x+1][y+1].material = R1/5 #I'm being clever here but be careful
 
+            print "SECOND"
             for x in xrange(self.x-4):
                 for y in xrange(self.y-4):
                     R2 = 0
@@ -61,6 +63,7 @@ class World:
 
 
         for i in xrange(secondpasses):
+            print "FIRST"
             old = copy.deepcopy(self.blocks)
             for x in xrange(self.x-2):
                 for y in xrange(self.y-2):
@@ -89,9 +92,14 @@ def display_shit(world):
                 pygame.draw.rect(windowSurfaceObj,pygame.Color(108,67,21),((world.blocks[i][j].x*20,world.blocks[i][j].y*20),(20,20)))
             else: pygame.draw.rect(windowSurfaceObj,pygame.Color(41,27,2),((world.blocks[i][j].x*20,world.blocks[i][j].y*20),(20,20)))
             pygame.display.update()
-    pygame.display.update()
-    fpsClock.tick(30)
-    
+    print "YAY"
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == 27):
+                exit()
+        pygame.display.update()
+        fpsClock.tick(30)
+
 display_shit(world)
 
 

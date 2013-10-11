@@ -43,15 +43,39 @@ class Catenary:
 	def __call__(self, x):
 		return self.ym + self.a * math.cosh((x - self.xm) / self.a)
 
+	def get_x_by_s(self, x0, s):
+		"""get_x_by_s(self, x0, s) -> x
+
+		Gives x such that self.arc_length(x0, x) == s.
+		"""
+		s += self.arc_length_indef(x0)
+		x = self.xm + self.a * math.asinh(s / self.a)
+		return x
+
+	def tension(self, x):
+		"""tension(self, x) -> d (units of meters)
+
+		Gives a result d such that d*l*g is the tension, for linear density l and gravitational acceleration g.
+		"""
+		slope = self.deriv(x)
+		return self.a * (slope**2+1)**0.5
+
+	def tangent(self, x):
+		dx, dy = 1, self.deriv(x)
+		norm = (dx**2 + dy**2)**0.5
+		return dx/norm, dy/norm
+
 	def deriv(self, x):
 		return math.sinh((x - self.xm) / self.a)
 
 	def second_deriv(self, x):
 		return math.cosh((x - self.xm) / self.a) / self.a
 
+	def arc_length_indef(self, x):
+		return self.a * math.sinh((x - self.xm) / self.a)
+
 	def arc_length(self, low, high):
-		indef = lambda x: self.a * math.sinh((x - self.xm) / self.a)
-		return indef(high) - indef(low)
+		return self.arc_length_indef(high) - self.arc_length_indef(low)
 
 	@staticmethod
 	def from_x0y0ddd(x0, y0, d, dd):
@@ -125,6 +149,10 @@ class Catenary:
 
 	@staticmethod
 	def from_ABl(x0, y0, x1, y1, length):
+		# wlog, let x0 < x1.
+		flip = x0 > x1
+		if flip:
+			x0, y0, x1, y1 = x1, y1, x0, y0
 		for schedule in Catenary.newton_schedules:
 			try:
 				cat = Catenary.scheduled_from_ABl(x0, y0, x1, y1, length, newton_schedule=schedule)
@@ -143,9 +171,6 @@ class Catenary:
 		assert x0 != x1
 		point_sep = ((x1 - x0)**2 + (y1 - y0)**2)**0.5
 		assert point_sep < length
-		# wlog, let x0 < x1.
-		if x0 > x1:
-			x0, y0, x1, y1 = x1, y1, x0, y0
 		# To start with, for dd chosen by the below heuristic, compute d to hit the target assuming a parabolic fit.
 		dd = (length / abs(x0-x1))**2
 		error = y1 - (y0 + dd * (x1 - x0)**2 / 2.0)
@@ -207,9 +232,9 @@ class Catenary:
 if __name__ == "__main__":
 	start, stop, length = 0, 5, 10
 	import time
-	t0 = time.time()
-	cat = Catenary.from_ABl(start, 0, stop, 5, length)
-	t1 = time.time()
+	t0 = time.clock()
+	cat = Catenary.from_ABl(start, 0, stop, -5, length)
+	t1 = time.clock()
 	print 1.0 / (t1 - t0)
 	print cat(start)
 	print cat(stop)

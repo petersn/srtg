@@ -1,6 +1,6 @@
 #! /usr/bin/python
 
-#import srt_solver
+import parabola_solver
 import catenary_solver
 import srt_fe
 from pygame.locals import *
@@ -12,9 +12,11 @@ clock = pygame.time.Clock()
 
 rope = srt_fe.Rope(None, 300, 20, 400)
 
-arc_x, arc_y = 150, 150
+arc_x, arc_y = 300, 20
 
 mouse_holding = None
+
+params = cat = None
 
 while True:
 	mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -28,22 +30,39 @@ while True:
 		if event.type == MOUSEBUTTONUP:
 			if event.button == 1:
 				mouse_holding = None
+		if event.type == KEYDOWN:
+			if event.key == K_UP:
+				mouse_holding = mouse_holding.next
+			if event.key == K_DOWN:
+				mouse_holding = mouse_holding.prev
 
 	screen.fill((255,255,255))
 
-	for length in (450,):# 200, 300, 400, 500):
+	for length in (400,):#(200, 300, 400, 500):
 		try:
-			#params = srt_solver.fit_parabola(arc_x, arc_y, mouse_x, mouse_y, length)
-			cat = catenary_solver.from_ABl(arc_x, arc_y, mouse_x, mouse_y, length)
+			params = parabola_solver.fit_parabola(arc_x, -arc_y, mouse_x, -mouse_y, length)
+		except AssertionError:
+			params = None
+		try:
+			cat = catenary_solver.Catenary.from_ABl(arc_x, -arc_y, mouse_x, -mouse_y, length)
 		except AssertionError:
 			cat = None
 
+		xs = range(min(arc_x, mouse_x), max(arc_x, mouse_x)+1)
+		do = []
+		if params:
+			p_ys = [-parabola_solver.parabola(x, params) for x in xs]
+			do.append(((255,0,0), p_ys))
 		if cat:
-			xs = range(min(arc_x, mouse_x), max(arc_x, mouse_x)+1)
-			ys = [cat(x) for x in xs]
+			c_ys = [-cat(x) for x in xs]
+			do.append(((0,255,0), c_ys))
+		for color, ys in do:
 			points = zip(xs, ys)
 			if len(points) > 1:
-				pygame.draw.lines(screen, (0,0,0), False, points)
+				try:
+					pygame.draw.lines(screen, color, False, points, 3)
+				except:
+					print points
 
 	points = [(seg.x, seg.y) for seg in rope.segs]
 	pygame.draw.lines(screen, (0,0,0), False, points)

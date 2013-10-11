@@ -1,68 +1,97 @@
 #! /usr/bin/python
 
-import os, json, math
+import os, json
+import catenary_solver
+import srt_fe
 
-# XXX: For now catenaries are faked as parabolas!
+LITTLE_G = 9.8
 
-# Half parabola arc length.
-# Gives arc length from 0 to x on a*x^2.
-def hpal(x, a):
-	return (2*a*x*(1 + 4*a**2*x**2)**0.5 + math.asinh(2*a*x)) / (4*a)
+class RopeModel:
+	def __init__(self, rope, c1, c2):
+		self.rope, self.c1, self.c2 = rope, c1, c2
 
-def dhpalda(x, a):
-	"""dhpalda(x, a) -> D[hpal(x, a), a]"""
-	return (2*a*x*(1 + 4*a**2*x**2)**0.5 - math.asinh(2*a*x)) / (4*a**2)
+class StaticRopeModel(RopeModel):
+	"""
+	StaticRopeModel models the situation where a rope is hanging in a catenary between two constraints.
+	"""
+	def process(self):
+		length = self.c2.s - self.c1.s
+		self.xy1, self.xy2 = self.c1.get_xy(), self.c2.get_xy()
+		self.cat = catenary_solver.Catenary.from_ABl(self.xy1[0], self.xy1[1], self.xy2[0], self.xy2[1], length)
+		self.c1.apply_force(
 
-def parabola_arc_length(x0, x1, params, hpal=hpal):
-	"""parabola_arc_length(x0, x1, params) -> arc length between x0 and x1"""
-	a, xm, ym = params
-	l0, l1 = abs(hpal(x0-xm, a)), abs(hpal(x1-xm, a))
-	# If both points are on the same side of the minimum, subtract the closer one.
-	if (x0-xm) * (x1-xm) > 0:
-		return max(l0, l1) - min(l0, l1)
-	else:
-		return l0 + l1
+	def get_xy(self, s):
+		x = self.cat.get_x_by_s(self.xy1[0], s-self.c1.s)
+		y = self.cat(x)
+		return x, y
 
-def darc_lengthda(x0, x1, params):
-	"""darc_lengthda(x0, x1, params) -> D[parabola_arc_length(x0, x1, params), a]"""
-	return parabola_arc_length(x0, x1, params, hpal=dhpalda)
+class RopeConstraint:
+	def __init__(self, s, xy, params=None):
+		self.s, self.xy, self.params = s, xy, params
 
-def parabola(x, params):
-	a, xm, ym = params
-	return a * (x - xm)**2.0 + ym
+	def get_xy(self):
+		return self.xy
 
-def dparabola(x, params):
-	a, xm, ym = params
-	return 2 * a * (x - xm)
+class FreeConstraint(RopeConstraint):
+	"""
+	FreeConstraint models a point on the rope that can vary in position freely.
+	This typically appears at the ends of the rope.
+	"""
 
-def fit_parabola(x0, y0, x1, y1, length):
-	assert (x0-x1)**2 + (y0-y1)**2 < length**2
-	assert x0 != x1
-	# Start by guessing a totally generic curve parameter,
-	# and that the lowest point is between x0 and x1.
-	a, xm = 1.0, (x0+x1)/2.0
-	old_xm = float("-inf")
-	# Ten rounds of approximation.
-	for IT in xrange(20):
-		# Match the arc length constraint by varying a with Newton's method.
-		for i in xrange(6):
-			params = (a, xm, 0)
-			error = parabola_arc_length(x0, x1, params) - length
-			slope = darc_lengthda(x0, x1, params)
-			a -= error / slope
-		# Recenter the parabola to pass through both control points.
-		xm = (a*(x0**2-x1**2) + y1 - y0) / (2*a*(x0-x1))
-		if abs(xm-old_xm) < 1e-5:
-			break
-		params = (a, xm, 0)
-		old_xm = xm
-	# Finally, set ym to pass through both control points.
-	ym = y0 - parabola(x0, params)
-	return a, xm, ym
+class PointConstraint(RopeConstraint):
+	"""
+	PointConstraint models the rope being perfectly affixed to an ideal anchor.
+	Used mostly for debugging.
+	"""
 
-def parabola_energy(x0, x1, params):
-	a, xm, ym = params
-	return -((x0 - x1) * (a * (x0**2 + x0*x1 + x1**2 - 3*(x0+x1)*xm + 3*xm**2) - 3*ym))/3
+class PulleyConstraint(RopeConstraint):
+	"""
+	PointConstraint models the rope being perfectly affixed to an ideal anchor.
+	Used mostly for debugging.
+	"""
+	def process(self):
+		# Figure out the tensions on us.
+
+class Rope:
+	def __init__(self, material, length):
+		self.material, self.length = material, length
+		# Sorted list of RopeConstraints on the rope.
+		self.constraints = [FreeConstraint(0, (0,0)), FreeConstraint(length, (0,0))]
+		# self.models[i] handles the segment before self.constraints[i].
+		# Invariant when properly built: len(self.models) == len(self.constraints)-1
+		self.models = []
+
+	def housework(self):
+		"""housework() -> None
+
+		Called after fiddling in various places to be more DRY.
+		Currently:
+			1) Sorts the constraint list.
+		"""
+		self.constraints.sort(key=lambda c: c.s)
+
+	def rebuild_models(self):
+		self.housework()
+		self.models = []
+		# Add a static model between each pair of constraints.
+		for i in xrange(len(self.constraints)-1):
+			c1, c2 = self.constraints[i], self.constraints[i+1]
+			self.models.append(StaticRopeModel(self, c1, c2))
+		for model in self.models:
+			model.process()
+
+	def constrain(self, constraint):
+		# Eliminiate constraints that constrain the same exact position.
+		for c in self.constraints[:]:
+			if c.s == constraint.s:
+				self.constraints.remove(c)
+		self.constraints.append(constraint)
+		self.housework()
+
+	def get_xy(self, s):
+		for model in self.models:
+			if model.c1.s <= s <= model.c2.s:
+				return model.get_xy(s)
 
 def load_config_file(*path):
 	"""load_config_file(*path) -> parsed json contents
@@ -79,15 +108,4 @@ def load_config_file(*path):
 		o.append(line)
 	data = "\n".join(o)
 	return json.loads(data)
-
-#rope_types = {}
-#for key, value in load_config_file("ropes.txt").iteritems():
-#	rope_types[key] = RopeType(key, value)
-
-if __name__ == "__main__":
-	params = fit_parabola(0, 0, 1, 1, 2)
-	print params
-	print parabola(0, params)
-	print parabola(1, params)
-	print parabola_arc_length(0, 1, params)
 
