@@ -18,7 +18,7 @@ class StaticRopeModel(RopeModel):
 		length = self.c2.s - self.c1.s
 		self.xy1, self.xy2 = self.c1.get_xy(), self.c2.get_xy()
 		self.cat = catenary_solver.Catenary.from_ABl(self.xy1[0], self.xy1[1], self.xy2[0], self.xy2[1], length)
-		self.c1.apply_force(
+#		self.c1.apply_force(
 
 	def get_xy(self, s):
 		x = self.cat.get_x_by_s(self.xy1[0], s-self.c1.s)
@@ -51,6 +51,7 @@ class PulleyConstraint(RopeConstraint):
 	"""
 	def process(self):
 		# Figure out the tensions on us.
+		pass
 
 class Rope:
 	def __init__(self, material, length):
